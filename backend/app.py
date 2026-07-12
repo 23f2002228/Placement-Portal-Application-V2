@@ -6,6 +6,7 @@ import config
 from models import db
 from routes.admin import admin_bp
 from routes.auth import auth_bp
+from routes.company import company_bp
 
 
 # Create and configure the Flask application.
@@ -25,6 +26,7 @@ jwt = JWTManager(app)
 # Add the route groups to the application.
 app.register_blueprint(auth_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(company_bp)
 
 
 @app.route("/", methods=["GET"])

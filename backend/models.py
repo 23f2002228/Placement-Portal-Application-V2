@@ -200,6 +200,12 @@ class PlacementDrive(db.Model):
     location = db.Column(db.String(120), nullable=False)
     salary = db.Column(db.Float, nullable=False)
     skills_required = db.Column(db.Text, nullable=False)
+    experience_required = db.Column(
+        db.String(120),
+        nullable=False,
+        default="Not specified"
+    )
+    benefits = db.Column(db.Text)
     employment_type = db.Column(db.String(50), nullable=False)
 
     min_cgpa = db.Column(db.Float, nullable=False)
