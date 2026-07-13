@@ -82,7 +82,9 @@ def register():
                 graduation_year=data["graduation_year"],
                 cgpa=data["cgpa"],
                 phone=data.get("phone"),
+                resume_url=data.get("resume_url"),
                 skills=data.get("skills"),
+                experience=data.get("experience"),
             )
         else:
             profile = CompanyProfile(

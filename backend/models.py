@@ -103,6 +103,7 @@ class StudentProfile(db.Model):
     phone = db.Column(db.String(20))
     resume_url = db.Column(db.String(255))
     skills = db.Column(db.Text)
+    experience = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=utc_now)
     updated_at = db.Column(
