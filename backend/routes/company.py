@@ -1,13 +1,16 @@
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
 
+from extensions import cache
+from mail_events import send_interview_scheduled_email, send_student_selected_email
 from models import (
     Application,
     ApplicationStatusHistory,
     CompanyProfile,
+    ExportJob,
     Interview,
     Notification,
     Placement,
@@ -45,10 +48,16 @@ def validation_error(message):
     return jsonify({"message": message}), 400
 
 
-def isoformat(value):
-    if value is None:
-        return None
-    return value.isoformat()
+def export_job_to_dict(export_job):
+    return {
+        "id": export_job.id,
+        "export_type": export_job.export_type,
+        "status": export_job.status,
+        "file_path": export_job.file_path,
+        "requested_at": export_job.requested_at,
+        "completed_at": export_job.completed_at,
+        "error_message": export_job.error_message,
+    }
 
 
 def parse_datetime(value, field_name):
@@ -166,15 +175,28 @@ def company_to_dict(company):
         "description": company.description,
         "approval_status": company.approval_status,
         "rejection_reason": company.rejection_reason,
-        "created_at": isoformat(company.created_at),
-        "updated_at": isoformat(company.updated_at),
+        "created_at": company.created_at,
+        "updated_at": company.updated_at,
     }
 
 
 def interview_to_dict(interview):
+    application = interview.application
+    student = application.student if application else None
+    user = student.user if student else None
+    job = application.drive if application else None
+    company = job.company if job else None
+
     return {
         "id": interview.id,
         "application_id": interview.application_id,
+        "application_status": application.status if application else None,
+        "application_remarks": application.remarks if application else None,
+        "student_name": student.full_name if student else None,
+        "student_email": user.email if user else None,
+        "job_id": job.id if job else None,
+        "job_title": job.job_title if job else None,
+        "company_name": company.company_name if company else None,
         "scheduled_at": interview.scheduled_at,
         "mode": interview.mode,
         "venue_or_link": interview.venue_or_link,
@@ -186,12 +208,40 @@ def interview_to_dict(interview):
     }
 
 
-def application_to_dict(application):
+def status_history_to_dict(history):
+    changed_by = history.changed_by_user
+
+    return {
+        "id": history.id,
+        "old_status": history.old_status,
+        "new_status": history.new_status,
+        "note": history.note,
+        "changed_at": history.changed_at,
+        "changed_by_email": changed_by.email if changed_by else None,
+        "changed_by_role": changed_by.role if changed_by else None,
+    }
+
+
+def placement_to_dict(placement):
+    return {
+        "id": placement.id,
+        "application_id": placement.application_id,
+        "position": placement.position,
+        "salary": placement.salary,
+        "joining_date": placement.joining_date,
+        "status": placement.status,
+        "placed_at": placement.placed_at,
+        "created_at": placement.created_at,
+        "updated_at": placement.updated_at,
+    }
+
+
+def application_to_dict(application, include_details=False):
     student = application.student
     user = student.user if student else None
     job = application.drive
 
-    return {
+    data = {
         "id": application.id,
         "student_id": application.student_id,
         "student_name": student.full_name if student else None,
@@ -203,6 +253,7 @@ def application_to_dict(application):
         "student_phone": student.phone if student else None,
         "student_resume_url": student.resume_url if student else None,
         "student_skills": student.skills if student else None,
+        "student_experience": student.experience if student else None,
         "job_id": application.drive_id,
         "job_title": job.job_title if job else None,
         "status": application.status,
@@ -212,6 +263,20 @@ def application_to_dict(application):
         "created_at": application.created_at,
         "updated_at": application.updated_at,
     }
+
+    if include_details:
+        data["job"] = job_to_dict(job) if job else None
+        data["status_history"] = [
+            status_history_to_dict(history)
+            for history in application.status_history
+        ]
+        data["placement"] = (
+            placement_to_dict(application.placement)
+            if application.placement
+            else None
+        )
+
+    return data
 
 
 def create_notification(user_id, title, message, notification_type):
@@ -271,6 +336,20 @@ def ensure_placement_for_selected_application(application):
         salary=drive.salary,
     )
     db.session.add(placement)
+
+
+def close_interviews_for_final_application_status(application, feedback=None):
+    if application.status not in {"selected", "rejected"}:
+        return
+
+    now = utc_now()
+    for interview in application.interviews:
+        if interview.status != "scheduled":
+            continue
+
+        interview.status = "completed" if interview.scheduled_at <= now else "cancelled"
+        if feedback and not interview.feedback:
+            interview.feedback = feedback
 
 
 def required_text(data, field_name):
@@ -435,6 +514,7 @@ def update_company_profile():
         return error
 
     db.session.commit()
+    cache.clear()
 
     return jsonify({
         "message": "Company profile updated successfully",
@@ -535,6 +615,8 @@ def create_company_job():
         db.session.rollback()
         return validation_error("Job data is invalid")
 
+    cache.clear()
+
     return jsonify({
         "message": "Job posted successfully and is pending admin approval",
         "job": job_to_dict(job),
@@ -589,6 +671,8 @@ def update_company_job(job_id):
         db.session.rollback()
         return validation_error("Job data is invalid")
 
+    cache.clear()
+
     return jsonify({
         "message": "Job updated successfully",
         "job": job_to_dict(job),
@@ -622,6 +706,7 @@ def update_company_job_status(job_id):
 
     job.status = JOB_STATUS_TO_DB[requested_status]
     db.session.commit()
+    cache.clear()
 
     return jsonify({
         "message": "Job status updated successfully",
@@ -678,6 +763,22 @@ def get_company_applications():
     return jsonify([application_to_dict(application) for application in applications]), 200
 
 
+@company_bp.route("/api/company/applications/<int:application_id>", methods=["GET"])
+@company_bp.route("/company/applications/<int:application_id>", methods=["GET"])
+@jwt_required()
+def get_company_application(application_id):
+    _, company, error = require_company_user()
+
+    if error:
+        return error
+
+    application, error = company_application_or_404(company, application_id)
+    if error:
+        return error
+
+    return jsonify(application_to_dict(application, include_details=True)), 200
+
+
 def update_application_status_with_payload(application_id, data):
     current_user, company, error = require_company_user()
 
@@ -697,12 +798,17 @@ def update_application_status_with_payload(application_id, data):
     if new_status == "rejected" and not feedback:
         return validation_error("feedback is required when rejecting an applicant")
 
+    old_status = application.status
     error = change_application_status(application, new_status, feedback, current_user)
     if error:
         return error
 
+    close_interviews_for_final_application_status(application, feedback)
     ensure_placement_for_selected_application(application)
     db.session.commit()
+
+    if new_status == "selected" and old_status != "selected":
+        send_student_selected_email(application)
 
     return jsonify({
         "message": "Application status updated successfully",
@@ -804,6 +910,7 @@ def schedule_interview(application_id):
         )
 
     db.session.commit()
+    send_interview_scheduled_email(application, interview)
 
     return jsonify({
         "message": "Interview scheduled successfully",
@@ -831,3 +938,80 @@ def get_company_interviews():
     )
 
     return jsonify([interview_to_dict(interview) for interview in interviews]), 200
+
+
+@company_bp.route("/api/company/exports/<export_type>", methods=["POST"])
+@company_bp.route("/company/exports/<export_type>", methods=["POST"])
+@jwt_required()
+def start_company_export(export_type):
+    current_user, _, error = require_company_user()
+
+    if error:
+        return error
+
+    if export_type not in {"application_history", "placement_history"}:
+        return validation_error("export_type must be application_history or placement_history")
+
+    export_job = ExportJob(
+        requested_by_user_id=current_user.id,
+        export_type=export_type,
+        status="pending",
+    )
+    db.session.add(export_job)
+    db.session.commit()
+
+    try:
+        from tasks import export_history_csv
+        export_history_csv.delay(export_job.id)
+    except Exception as exc:
+        export_job.status = "failed"
+        export_job.error_message = str(exc)
+        db.session.commit()
+        return jsonify({
+            "message": "Could not queue export job. Please make sure Redis is running.",
+            "export_job": export_job_to_dict(export_job),
+        }), 503
+
+    return jsonify({
+        "message": "Export started. You will be notified when it is ready.",
+        "export_job": export_job_to_dict(export_job),
+    }), 202
+
+
+@company_bp.route("/api/company/exports", methods=["GET"])
+@company_bp.route("/company/exports", methods=["GET"])
+@jwt_required()
+def get_company_exports():
+    current_user, _, error = require_company_user()
+
+    if error:
+        return error
+
+    exports = (
+        ExportJob.query
+        .filter_by(requested_by_user_id=current_user.id)
+        .order_by(ExportJob.requested_at.desc())
+        .all()
+    )
+
+    return jsonify([export_job_to_dict(export_job) for export_job in exports]), 200
+
+
+@company_bp.route("/api/company/exports/<int:export_id>/download", methods=["GET"])
+@company_bp.route("/company/exports/<int:export_id>/download", methods=["GET"])
+@jwt_required()
+def download_company_export(export_id):
+    current_user, _, error = require_company_user()
+
+    if error:
+        return error
+
+    export_job = db.session.get(ExportJob, export_id)
+
+    if not export_job or export_job.requested_by_user_id != current_user.id:
+        return jsonify({"message": "Export not found"}), 404
+
+    if export_job.status != "completed" or not export_job.file_path:
+        return validation_error("Export is not ready yet")
+
+    return send_file(export_job.file_path, as_attachment=True)
