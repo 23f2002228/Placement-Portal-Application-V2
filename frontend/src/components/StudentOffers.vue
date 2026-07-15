@@ -1,10 +1,21 @@
 <template>
   <section>
     <h2>Offers</h2>
-    <button @click="loadPlacements">Refresh</button>
+    <div class="controls">
+      <button @click="loadPlacements">Refresh</button>
+      <button @click="startExport">Export placements CSV</button>
+    </div>
 
     <p v-if="loading">Loading offers...</p>
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="message" class="success">{{ message }}</p>
+
+    <ExportJobs
+      ref="placementExports"
+      api-base="http://127.0.0.1:5000/api/student"
+      :export-types="['placement_history']"
+      title="Placement export jobs"
+    />
 
     <table>
       <thead>
@@ -35,14 +46,19 @@
 
 <script>
 import axios from 'axios'
+import ExportJobs from '@/components/ExportJobs.vue'
 
 export default {
   name: 'StudentOffers',
+  components: {
+    ExportJobs,
+  },
   data() {
     return {
       placements: [],
       loading: false,
       error: '',
+      message: '',
     }
   },
   mounted() {
@@ -57,6 +73,7 @@ export default {
     async loadPlacements() {
       this.loading = true
       this.error = ''
+      this.message = ''
 
       try {
         const response = await axios.get('http://127.0.0.1:5000/api/student/placements', {
@@ -92,13 +109,33 @@ export default {
         this.error = error.response?.data?.message || 'Could not download confirmation.'
       }
     },
+    async startExport() {
+      this.error = ''
+      this.message = ''
+
+      try {
+        const response = await axios.post(
+          'http://127.0.0.1:5000/api/student/exports/placement_history',
+          {},
+          { headers: this.headers() },
+        )
+        this.message = response.data.message
+        if (this.$refs.placementExports) {
+          this.$refs.placementExports.loadExports()
+        }
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Could not start CSV export.'
+      }
+    },
   },
 }
 </script>
 
 <style scoped>
-button { padding: 8px; border: 1px solid #bbb; background: white; cursor: pointer; margin-bottom: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+button { padding: 8px; border: 1px solid #bbb; background: white; cursor: pointer; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
 .error { color: #b42318; }
+.success { color: #067647; }
 </style>

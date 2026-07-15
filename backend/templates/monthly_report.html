@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Monthly Placement Report</title>
+</head>
+<body>
+    <p>Hello {{ company.hr_name }},</p>
+    <p>Here is the placement report for {{ "%02d"|format(month) }}/{{ year }}.</p>
+    <p><b>Total drives:</b> {{ total_drives }}</p>
+    <p><b>Total applications:</b> {{ total_applications }}</p>
+    <p><b>Total selected:</b> {{ total_selected }}</p>
+    <p><b>Total placements:</b> {{ total_placements }}</p>
+</body>
+</html>

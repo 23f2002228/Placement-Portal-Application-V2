@@ -3,10 +3,12 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
 import config
+from extensions import cache
 from models import db
 from routes.admin import admin_bp
 from routes.auth import auth_bp
 from routes.company import company_bp
+from routes.notifications import notifications_bp
 from routes.student import student_bp
 
 
@@ -18,16 +20,23 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.SQLALCHEMY_TRACK_MODIFICAT
 app.config["JWT_SECRET_KEY"] = config.JWT_SECRET_KEY
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = config.JWT_ACCESS_TOKEN_EXPIRES
 app.config["DEBUG"] = config.DEBUG
+app.config.from_mapping({
+    "CACHE_TYPE": "RedisCache",
+    "CACHE_REDIS_URL": config.REDIS_URL,
+    "CACHE_DEFAULT_TIMEOUT": 300,
+})
 
 # Connect Flask extensions to the application.
 CORS(app)
 db.init_app(app)
+cache.init_app(app)
 jwt = JWTManager(app)
 
 # Add the route groups to the application.
 app.register_blueprint(auth_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(company_bp)
+app.register_blueprint(notifications_bp)
 app.register_blueprint(student_bp)
 
 

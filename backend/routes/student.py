@@ -1,14 +1,16 @@
 from datetime import date
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, request, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
+from extensions import cache
 from models import (
     Application,
     ApplicationStatusHistory,
     CompanyProfile,
+    ExportJob,
     Interview,
     Placement,
     PlacementDrive,
@@ -26,10 +28,16 @@ def validation_error(message):
     return jsonify({"message": message}), 400
 
 
-def isoformat(value):
-    if value is None:
-        return None
-    return value.isoformat()
+def export_job_to_dict(export_job):
+    return {
+        "id": export_job.id,
+        "export_type": export_job.export_type,
+        "status": export_job.status,
+        "file_path": export_job.file_path,
+        "requested_at": export_job.requested_at,
+        "completed_at": export_job.completed_at,
+        "error_message": export_job.error_message,
+    }
 
 
 def require_student_user():
@@ -77,8 +85,8 @@ def student_to_dict(student):
         "resume_url": student.resume_url,
         "skills": student.skills,
         "experience": student.experience,
-        "created_at": isoformat(student.created_at),
-        "updated_at": isoformat(student.updated_at),
+        "created_at": student.created_at,
+        "updated_at": student.updated_at,
     }
 
 
@@ -133,8 +141,8 @@ def job_to_dict(job, student=None, application=None):
         "min_cgpa": job.min_cgpa,
         "eligible_branches": job.eligible_branches,
         "eligible_year": job.eligible_year,
-        "application_deadline": isoformat(job.application_deadline),
-        "drive_date": isoformat(job.drive_date),
+        "application_deadline": job.application_deadline,
+        "drive_date": job.drive_date,
         "status": job.status,
         "already_applied": application is not None,
         "application_id": application.id if application else None,
@@ -142,6 +150,36 @@ def job_to_dict(job, student=None, application=None):
         "eligible": eligible,
         "eligibility_message": eligibility_message,
     }
+
+
+@cache.memoize(timeout=300)
+def get_cached_student_jobs(student_id, search):
+    student = db.session.get(StudentProfile, student_id)
+    query = (
+        PlacementDrive.query
+        .join(PlacementDrive.company)
+        .filter(PlacementDrive.status == "approved")
+    )
+
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(or_(
+            PlacementDrive.job_title.ilike(pattern),
+            PlacementDrive.skills_required.ilike(pattern),
+            CompanyProfile.company_name.ilike(pattern),
+        ))
+
+    jobs = query.order_by(PlacementDrive.application_deadline.asc()).all()
+    applications = Application.query.filter_by(student_id=student_id).all()
+    applications_by_drive = {
+        application.drive_id: application
+        for application in applications
+    }
+
+    return [
+        job_to_dict(job, student, applications_by_drive.get(job.id))
+        for job in jobs
+    ]
 
 
 def interview_to_dict(interview):
@@ -154,14 +192,14 @@ def interview_to_dict(interview):
         "application_id": interview.application_id,
         "job_title": job.job_title if job else None,
         "company_name": company.company_name if company else None,
-        "scheduled_at": isoformat(interview.scheduled_at),
+        "scheduled_at": interview.scheduled_at,
         "mode": interview.mode,
         "venue_or_link": interview.venue_or_link,
         "round_name": interview.round_name,
         "status": interview.status,
         "feedback": interview.feedback,
-        "created_at": isoformat(interview.created_at),
-        "updated_at": isoformat(interview.updated_at),
+        "created_at": interview.created_at,
+        "updated_at": interview.updated_at,
     }
 
 
@@ -171,7 +209,7 @@ def status_history_to_dict(history):
         "old_status": history.old_status,
         "new_status": history.new_status,
         "note": history.note,
-        "changed_at": isoformat(history.changed_at),
+        "changed_at": history.changed_at,
     }
 
 
@@ -187,11 +225,11 @@ def placement_to_dict(placement):
         "company_name": company.company_name if company else None,
         "position": placement.position,
         "salary": placement.salary,
-        "joining_date": isoformat(placement.joining_date),
+        "joining_date": placement.joining_date,
         "status": placement.status,
-        "placed_at": isoformat(placement.placed_at),
-        "created_at": isoformat(placement.created_at),
-        "updated_at": isoformat(placement.updated_at),
+        "placed_at": placement.placed_at,
+        "created_at": placement.created_at,
+        "updated_at": placement.updated_at,
     }
 
 
@@ -208,9 +246,9 @@ def application_to_dict(application, include_details=False):
         "salary": job.salary if job else None,
         "status": application.status,
         "remarks": application.remarks,
-        "application_date": isoformat(application.application_date),
-        "created_at": isoformat(application.created_at),
-        "updated_at": isoformat(application.updated_at),
+        "application_date": application.application_date,
+        "created_at": application.created_at,
+        "updated_at": application.updated_at,
     }
 
     if include_details:
@@ -343,6 +381,8 @@ def update_student_profile():
         db.session.rollback()
         return validation_error("Student profile data is invalid or already exists")
 
+    cache.clear()
+
     return jsonify({
         "message": "Student profile updated successfully",
         "student": student_to_dict(student),
@@ -392,31 +432,7 @@ def get_student_jobs():
         return error
 
     search = request.args.get("search", "").strip()
-    query = (
-        PlacementDrive.query
-        .join(PlacementDrive.company)
-        .filter(PlacementDrive.status == "approved")
-    )
-
-    if search:
-        pattern = f"%{search}%"
-        query = query.filter(or_(
-            PlacementDrive.job_title.ilike(pattern),
-            PlacementDrive.skills_required.ilike(pattern),
-            CompanyProfile.company_name.ilike(pattern),
-        ))
-
-    jobs = query.order_by(PlacementDrive.application_deadline.asc()).all()
-    applications = Application.query.filter_by(student_id=student.id).all()
-    applications_by_drive = {
-        application.drive_id: application
-        for application in applications
-    }
-
-    return jsonify([
-        job_to_dict(job, student, applications_by_drive.get(job.id))
-        for job in jobs
-    ]), 200
+    return jsonify(get_cached_student_jobs(student.id, search.lower())), 200
 
 
 @student_bp.route("/api/student/jobs/<int:job_id>", methods=["GET"])
@@ -488,6 +504,8 @@ def apply_for_job(job_id):
     except IntegrityError:
         db.session.rollback()
         return validation_error("You have already applied for this job")
+
+    cache.clear()
 
     return jsonify({
         "message": "Application submitted successfully",
@@ -626,3 +644,80 @@ def download_placement_confirmation(placement_id):
             "Content-Disposition": f"attachment; filename={filename}",
         },
     )
+
+
+@student_bp.route("/api/student/exports/<export_type>", methods=["POST"])
+@student_bp.route("/student/exports/<export_type>", methods=["POST"])
+@jwt_required()
+def start_student_export(export_type):
+    current_user, _, error = require_student_user()
+
+    if error:
+        return error
+
+    if export_type not in {"application_history", "placement_history"}:
+        return validation_error("export_type must be application_history or placement_history")
+
+    export_job = ExportJob(
+        requested_by_user_id=current_user.id,
+        export_type=export_type,
+        status="pending",
+    )
+    db.session.add(export_job)
+    db.session.commit()
+
+    try:
+        from tasks import export_history_csv
+        export_history_csv.delay(export_job.id)
+    except Exception as exc:
+        export_job.status = "failed"
+        export_job.error_message = str(exc)
+        db.session.commit()
+        return jsonify({
+            "message": "Could not queue export job. Please make sure Redis is running.",
+            "export_job": export_job_to_dict(export_job),
+        }), 503
+
+    return jsonify({
+        "message": "Export started. You will be notified when it is ready.",
+        "export_job": export_job_to_dict(export_job),
+    }), 202
+
+
+@student_bp.route("/api/student/exports", methods=["GET"])
+@student_bp.route("/student/exports", methods=["GET"])
+@jwt_required()
+def get_student_exports():
+    current_user, _, error = require_student_user()
+
+    if error:
+        return error
+
+    exports = (
+        ExportJob.query
+        .filter_by(requested_by_user_id=current_user.id)
+        .order_by(ExportJob.requested_at.desc())
+        .all()
+    )
+
+    return jsonify([export_job_to_dict(export_job) for export_job in exports]), 200
+
+
+@student_bp.route("/api/student/exports/<int:export_id>/download", methods=["GET"])
+@student_bp.route("/student/exports/<int:export_id>/download", methods=["GET"])
+@jwt_required()
+def download_student_export(export_id):
+    current_user, _, error = require_student_user()
+
+    if error:
+        return error
+
+    export_job = db.session.get(ExportJob, export_id)
+
+    if not export_job or export_job.requested_by_user_id != current_user.id:
+        return jsonify({"message": "Export not found"}), 404
+
+    if export_job.status != "completed" or not export_job.file_path:
+        return validation_error("Export is not ready yet")
+
+    return send_file(export_job.file_path, as_attachment=True)
