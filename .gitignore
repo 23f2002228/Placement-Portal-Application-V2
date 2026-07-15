@@ -10,3 +10,4 @@ __pycache__/
 .env
 backend/generated/exports/*.csv
 backend/generated/reports/*.html
+backend/uploads/resumes/

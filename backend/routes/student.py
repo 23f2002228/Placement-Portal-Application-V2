@@ -1,9 +1,12 @@
+import os
 from datetime import date
+from uuid import uuid4
 
-from flask import Blueprint, Response, jsonify, request, send_file
+from flask import Blueprint, Response, current_app, jsonify, request, send_file, send_from_directory, url_for
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
+from werkzeug.utils import secure_filename
 
 from extensions import cache
 from models import (
@@ -22,10 +25,53 @@ from models import (
 
 
 student_bp = Blueprint("student", __name__)
+ALLOWED_RESUME_EXTENSIONS = {"pdf"}
+MAX_RESUME_BYTES = 5 * 1024 * 1024
 
 
 def validation_error(message):
     return jsonify({"message": message}), 400
+
+
+def resume_upload_folder():
+    return os.path.join(current_app.root_path, "uploads", "resumes")
+
+
+def allowed_resume_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_RESUME_EXTENSIONS
+
+
+def is_pdf_file(file_storage):
+    file_storage.seek(0)
+    header = file_storage.read(5)
+    file_storage.seek(0)
+    return header == b"%PDF-"
+
+
+def local_resume_path_from_url(resume_url):
+    marker = "/api/uploads/resumes/"
+
+    if not resume_url or marker not in resume_url:
+        return None
+
+    filename = resume_url.rsplit(marker, 1)[1].split("?", 1)[0]
+    if filename != os.path.basename(filename):
+        return None
+
+    upload_folder = os.path.abspath(resume_upload_folder())
+    file_path = os.path.abspath(os.path.join(upload_folder, filename))
+
+    if os.path.commonpath([upload_folder, file_path]) != upload_folder:
+        return None
+
+    return file_path
+
+
+def delete_local_resume(resume_url):
+    file_path = local_resume_path_from_url(resume_url)
+
+    if file_path and os.path.exists(file_path):
+        os.remove(file_path)
 
 
 def format_datetime(value):
@@ -399,6 +445,59 @@ def update_student_profile():
         "message": "Student profile updated successfully",
         "student": student_to_dict(student),
     }), 200
+
+
+@student_bp.route("/api/student/profile/resume", methods=["POST"])
+@student_bp.route("/student/profile/resume", methods=["POST"])
+@jwt_required()
+def upload_student_resume():
+    _, student, error = require_student_user()
+
+    if error:
+        return error
+
+    resume = request.files.get("resume")
+
+    if not resume or resume.filename == "":
+        return validation_error("Please choose a resume PDF to upload")
+
+    if not allowed_resume_file(resume.filename):
+        return validation_error("Resume must be a PDF file")
+
+    if not is_pdf_file(resume):
+        return validation_error("Resume file content must be a valid PDF")
+
+    resume.seek(0, os.SEEK_END)
+    file_size = resume.tell()
+    resume.seek(0)
+
+    if file_size > MAX_RESUME_BYTES:
+        return validation_error("Resume must be 5 MB or smaller")
+
+    upload_folder = resume_upload_folder()
+    os.makedirs(upload_folder, exist_ok=True)
+
+    original_filename = secure_filename(resume.filename)
+    extension = original_filename.rsplit(".", 1)[1].lower()
+    filename = f"student-{student.id}-{uuid4().hex}.{extension}"
+    resume.save(os.path.join(upload_folder, filename))
+
+    old_resume_url = student.resume_url
+    student.resume_url = url_for("student.get_uploaded_resume", filename=filename, _external=True)
+    db.session.commit()
+    delete_local_resume(old_resume_url)
+    cache.clear()
+
+    return jsonify({
+        "message": "Resume uploaded successfully",
+        "resume_url": student.resume_url,
+        "student": student_to_dict(student),
+    }), 200
+
+
+@student_bp.route("/api/uploads/resumes/<path:filename>", methods=["GET"])
+def get_uploaded_resume(filename):
+    return send_from_directory(resume_upload_folder(), filename)
 
 
 @student_bp.route("/api/student/dashboard", methods=["GET"])

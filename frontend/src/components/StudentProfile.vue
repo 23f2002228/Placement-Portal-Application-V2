@@ -32,11 +32,20 @@
       <label>CGPA<input v-model.number="form.cgpa" type="number" min="0" max="10" step="0.01" required /></label>
       <label>Phone<input v-model="form.phone" /></label>
       <label class="wide">Resume URL<input v-model="form.resume_url" /></label>
+      <label class="wide">
+        Upload resume PDF
+        <input type="file" accept="application/pdf" @change="selectResume" />
+      </label>
+      <p class="hint wide">
+        PDF only, up to 5 MB. The selected file is uploaded only when you save.
+        <span v-if="pendingResumeName">Selected: {{ pendingResumeName }}</span>
+      </p>
       <label class="wide">Skills<textarea v-model="form.skills" rows="2"></textarea></label>
       <label class="wide">Experience<textarea v-model="form.experience" rows="3"></textarea></label>
 
       <div class="form-actions">
         <button type="submit">Save profile</button>
+        <span v-if="uploadingResume">Uploading resume...</span>
         <button type="button" @click="cancelEdit">Cancel</button>
       </div>
     </form>
@@ -53,6 +62,9 @@ export default {
       form: this.emptyForm(),
       isEditing: false,
       loading: false,
+      uploadingResume: false,
+      pendingResumeFile: null,
+      pendingResumeName: '',
       error: '',
       message: '',
     }
@@ -118,14 +130,59 @@ export default {
         await axios.patch('http://127.0.0.1:5000/api/student/profile', this.form, {
           headers: this.headers(),
         })
+        if (this.pendingResumeFile) {
+          await this.uploadSelectedResume()
+        }
         this.message = 'Profile updated successfully.'
         this.isEditing = false
       } catch (error) {
         this.error = error.response?.data?.message || 'Could not update student profile.'
       }
     },
+    selectResume(event) {
+      const file = event.target.files[0]
+      if (!file) {
+        return
+      }
+
+      this.error = ''
+      this.message = ''
+
+      if (file.type !== 'application/pdf') {
+        this.error = 'Please upload a PDF resume.'
+        event.target.value = ''
+        return
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        this.error = 'Resume must be 5 MB or smaller.'
+        event.target.value = ''
+        return
+      }
+
+      this.pendingResumeFile = file
+      this.pendingResumeName = file.name
+    },
+    async uploadSelectedResume() {
+      const formData = new FormData()
+      formData.append('resume', this.pendingResumeFile)
+      this.uploadingResume = true
+
+      try {
+        const response = await axios.post('http://127.0.0.1:5000/api/student/profile/resume', formData, {
+          headers: this.headers(),
+        })
+        this.form.resume_url = response.data.resume_url || ''
+        this.pendingResumeFile = null
+        this.pendingResumeName = ''
+      } finally {
+        this.uploadingResume = false
+      }
+    },
     cancelEdit() {
       this.isEditing = false
+      this.pendingResumeFile = null
+      this.pendingResumeName = ''
       this.loadProfile()
     },
   },
@@ -141,6 +198,7 @@ label { display: grid; gap: 6px; }
 input, textarea, button { padding: 8px; border: 1px solid #bbb; }
 button { width: fit-content; cursor: pointer; background: white; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint { margin: -6px 0 0; color: #667085; font-size: 0.9rem; }
 .error { color: #b42318; }
 .success { color: #067647; }
 @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
