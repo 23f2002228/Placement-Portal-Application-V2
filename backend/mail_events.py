@@ -13,8 +13,8 @@ def try_send_email(*args, **kwargs):
 def format_value(value):
     if value is None:
         return "-"
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d %H:%M")
     return str(value)
 
 

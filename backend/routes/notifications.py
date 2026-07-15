@@ -7,6 +7,12 @@ from models import Notification, User, db
 notifications_bp = Blueprint("notifications", __name__)
 
 
+def format_datetime(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
 def notification_to_dict(notification):
     return {
         "id": notification.id,
@@ -14,7 +20,7 @@ def notification_to_dict(notification):
         "message": notification.message,
         "notification_type": notification.notification_type,
         "is_read": notification.is_read,
-        "created_at": notification.created_at,
+        "created_at": format_datetime(notification.created_at),
     }
 
 

@@ -50,7 +50,7 @@ def try_send_email(*args, **kwargs):
 
 
 def format_datetime(value):
-    return value.isoformat() if value else ""
+    return value.strftime("%Y-%m-%d %H:%M") if value else ""
 
 
 def previous_month(today):

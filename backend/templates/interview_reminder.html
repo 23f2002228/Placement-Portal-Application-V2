@@ -9,7 +9,7 @@
     <p>This is a reminder for your upcoming interview.</p>
     <p><b>Job:</b> {{ drive.job_title }}</p>
     <p><b>Company:</b> {{ company.company_name if company else "Company" }}</p>
-    <p><b>Scheduled at:</b> {{ interview.scheduled_at }}</p>
+    <p><b>Scheduled at:</b> {{ interview.scheduled_at.strftime("%Y-%m-%d %H:%M") }}</p>
     <p><b>Mode:</b> {{ interview.mode }}</p>
     {% if interview.venue_or_link %}
         <p><b>Venue/Link:</b> {{ interview.venue_or_link }}</p>
