@@ -47,6 +47,18 @@ def validation_error(message):
     return jsonify({"message": message}), 400
 
 
+def format_datetime(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def format_date(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d")
+
+
 def require_reason(data, field_name="reason"):
     reason = (data.get(field_name) or "").strip()
 
@@ -80,8 +92,8 @@ def company_to_dict(company):
         "rejection_reason": company.rejection_reason,
         "is_active": company.user.is_active if company.user else False,
         "is_blacklisted": company.user.is_blacklisted if company.user else False,
-        "created_at": company.created_at,
-        "updated_at": company.updated_at,
+        "created_at": format_datetime(company.created_at),
+        "updated_at": format_datetime(company.updated_at),
     }
 
 
@@ -103,31 +115,9 @@ def student_to_dict(student):
         "experience": student.experience,
         "is_active": student.user.is_active if student.user else False,
         "is_blacklisted": student.user.is_blacklisted if student.user else False,
-        "created_at": student.created_at,
-        "updated_at": student.updated_at,
+        "created_at": format_datetime(student.created_at),
+        "updated_at": format_datetime(student.updated_at),
     }
-
-
-@cache.memoize(timeout=300)
-def get_cached_students(search):
-    query = StudentProfile.query.join(User)
-
-    if search:
-        pattern = f"%{search}%"
-        search_filters = [
-            StudentProfile.full_name.ilike(pattern),
-            StudentProfile.roll_number.ilike(pattern),
-            StudentProfile.phone.ilike(pattern),
-            User.email.ilike(pattern),
-        ]
-
-        if search.isdigit():
-            search_filters.append(StudentProfile.id == int(search))
-
-        query = query.filter(or_(*search_filters))
-
-    students = query.order_by(StudentProfile.full_name.asc()).all()
-    return [student_to_dict(student) for student in students]
 
 
 def drive_to_dict(drive):
@@ -144,13 +134,13 @@ def drive_to_dict(drive):
         "min_cgpa": drive.min_cgpa,
         "eligible_branches": drive.eligible_branches,
         "eligible_year": drive.eligible_year,
-        "application_deadline": drive.application_deadline,
-        "drive_date": drive.drive_date,
+        "application_deadline": format_datetime(drive.application_deadline),
+        "drive_date": format_datetime(drive.drive_date),
         "status": drive.status,
         "rejection_reason": drive.rejection_reason,
         "applications_count": len(drive.applications),
-        "created_at": drive.created_at,
-        "updated_at": drive.updated_at,
+        "created_at": format_datetime(drive.created_at),
+        "updated_at": format_datetime(drive.updated_at),
     }
 
 
@@ -158,14 +148,14 @@ def interview_to_dict(interview):
     return {
         "id": interview.id,
         "application_id": interview.application_id,
-        "scheduled_at": interview.scheduled_at,
+        "scheduled_at": format_datetime(interview.scheduled_at),
         "mode": interview.mode,
         "venue_or_link": interview.venue_or_link,
         "round_name": interview.round_name,
         "status": interview.status,
         "feedback": interview.feedback,
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at,
+        "created_at": format_datetime(interview.created_at),
+        "updated_at": format_datetime(interview.updated_at),
     }
 
 
@@ -177,7 +167,7 @@ def status_history_to_dict(history):
         "old_status": history.old_status,
         "new_status": history.new_status,
         "note": history.note,
-        "changed_at": history.changed_at,
+        "changed_at": format_datetime(history.changed_at),
         "changed_by_email": changed_by.email if changed_by else None,
         "changed_by_role": changed_by.role if changed_by else None,
     }
@@ -189,11 +179,11 @@ def placement_to_dict(placement):
         "application_id": placement.application_id,
         "position": placement.position,
         "salary": placement.salary,
-        "joining_date": placement.joining_date,
+        "joining_date": format_date(placement.joining_date),
         "status": placement.status,
-        "placed_at": placement.placed_at,
-        "created_at": placement.created_at,
-        "updated_at": placement.updated_at,
+        "placed_at": format_datetime(placement.placed_at),
+        "created_at": format_datetime(placement.created_at),
+        "updated_at": format_datetime(placement.updated_at),
     }
 
 
@@ -221,9 +211,9 @@ def application_to_dict(application, include_details=False):
         "company_name": company.company_name if company else None,
         "status": application.status,
         "remarks": application.remarks,
-        "application_date": application.application_date,
-        "created_at": application.created_at,
-        "updated_at": application.updated_at,
+        "application_date": format_datetime(application.application_date),
+        "created_at": format_datetime(application.created_at),
+        "updated_at": format_datetime(application.updated_at),
     }
 
     if include_details:
@@ -250,6 +240,7 @@ def application_to_dict(application, include_details=False):
 @admin_bp.route("/api/admin/dashboard", methods=["GET"])
 @admin_bp.route("/admin/dashboard", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=300, key_prefix="admin_dashboard")
 def admin_dashboard():
     _, error = require_admin_user()
 
@@ -316,7 +307,7 @@ def get_all_users():
             "role": user.role,
             "is_active": user.is_active,
             "is_blacklisted": user.is_blacklisted,
-            "created_at": user.created_at,
+            "created_at": format_datetime(user.created_at),
         }
         for user in users
     ]), 200
@@ -435,6 +426,7 @@ def reject_company(company_id):
 @admin_bp.route("/api/admin/students", methods=["GET"])
 @admin_bp.route("/admin/students", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def get_students():
     _, error = require_admin_user()
 
@@ -442,12 +434,31 @@ def get_students():
         return error
 
     search = request.args.get("search", "").strip()
-    return jsonify(get_cached_students(search.lower())), 200
+    query = StudentProfile.query.join(User)
+
+    if search:
+        pattern = f"%{search}%"
+        search_filters = [
+            StudentProfile.full_name.ilike(pattern),
+            StudentProfile.roll_number.ilike(pattern),
+            StudentProfile.phone.ilike(pattern),
+            User.email.ilike(pattern),
+        ]
+
+        if search.isdigit():
+            search_filters.append(StudentProfile.id == int(search))
+
+        query = query.filter(or_(*search_filters))
+
+    students = query.order_by(StudentProfile.full_name.asc()).all()
+
+    return jsonify([student_to_dict(student) for student in students]), 200
 
 
 @admin_bp.route("/api/admin/drives", methods=["GET"])
 @admin_bp.route("/admin/drives", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def get_drives():
     _, error = require_admin_user()
 
@@ -582,6 +593,7 @@ def close_drive(drive_id):
 @admin_bp.route("/api/admin/applications", methods=["GET"])
 @admin_bp.route("/admin/applications", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=300, query_string=True)
 def get_applications():
     _, error = require_admin_user()
 

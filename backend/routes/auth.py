@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_requir
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 import re
+from extensions import cache
 from models import CompanyProfile, StudentProfile, User, db
 
 
@@ -106,6 +107,8 @@ def register():
         return jsonify({
             "message": "Registration data is invalid or already exists"
         }), 400
+
+    cache.clear()
 
     return jsonify({
         "message": "User registered successfully",

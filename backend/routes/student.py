@@ -28,14 +28,26 @@ def validation_error(message):
     return jsonify({"message": message}), 400
 
 
+def format_datetime(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def format_date(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d")
+
+
 def export_job_to_dict(export_job):
     return {
         "id": export_job.id,
         "export_type": export_job.export_type,
         "status": export_job.status,
         "file_path": export_job.file_path,
-        "requested_at": export_job.requested_at,
-        "completed_at": export_job.completed_at,
+        "requested_at": format_datetime(export_job.requested_at),
+        "completed_at": format_datetime(export_job.completed_at),
         "error_message": export_job.error_message,
     }
 
@@ -85,8 +97,8 @@ def student_to_dict(student):
         "resume_url": student.resume_url,
         "skills": student.skills,
         "experience": student.experience,
-        "created_at": student.created_at,
-        "updated_at": student.updated_at,
+        "created_at": format_datetime(student.created_at),
+        "updated_at": format_datetime(student.updated_at),
     }
 
 
@@ -141,8 +153,8 @@ def job_to_dict(job, student=None, application=None):
         "min_cgpa": job.min_cgpa,
         "eligible_branches": job.eligible_branches,
         "eligible_year": job.eligible_year,
-        "application_deadline": job.application_deadline,
-        "drive_date": job.drive_date,
+        "application_deadline": format_datetime(job.application_deadline),
+        "drive_date": format_datetime(job.drive_date),
         "status": job.status,
         "already_applied": application is not None,
         "application_id": application.id if application else None,
@@ -192,14 +204,14 @@ def interview_to_dict(interview):
         "application_id": interview.application_id,
         "job_title": job.job_title if job else None,
         "company_name": company.company_name if company else None,
-        "scheduled_at": interview.scheduled_at,
+        "scheduled_at": format_datetime(interview.scheduled_at),
         "mode": interview.mode,
         "venue_or_link": interview.venue_or_link,
         "round_name": interview.round_name,
         "status": interview.status,
         "feedback": interview.feedback,
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at,
+        "created_at": format_datetime(interview.created_at),
+        "updated_at": format_datetime(interview.updated_at),
     }
 
 
@@ -209,7 +221,7 @@ def status_history_to_dict(history):
         "old_status": history.old_status,
         "new_status": history.new_status,
         "note": history.note,
-        "changed_at": history.changed_at,
+        "changed_at": format_datetime(history.changed_at),
     }
 
 
@@ -225,11 +237,11 @@ def placement_to_dict(placement):
         "company_name": company.company_name if company else None,
         "position": placement.position,
         "salary": placement.salary,
-        "joining_date": placement.joining_date,
+        "joining_date": format_date(placement.joining_date),
         "status": placement.status,
-        "placed_at": placement.placed_at,
-        "created_at": placement.created_at,
-        "updated_at": placement.updated_at,
+        "placed_at": format_datetime(placement.placed_at),
+        "created_at": format_datetime(placement.created_at),
+        "updated_at": format_datetime(placement.updated_at),
     }
 
 
@@ -246,9 +258,9 @@ def application_to_dict(application, include_details=False):
         "salary": job.salary if job else None,
         "status": application.status,
         "remarks": application.remarks,
-        "application_date": application.application_date,
-        "created_at": application.created_at,
-        "updated_at": application.updated_at,
+        "application_date": format_datetime(application.application_date),
+        "created_at": format_datetime(application.created_at),
+        "updated_at": format_datetime(application.updated_at),
     }
 
     if include_details:
@@ -624,7 +636,7 @@ def download_placement_confirmation(placement_id):
     application = placement.application
     job = application.drive
     company = job.company
-    today = date.today().isoformat()
+    today = date.today().strftime("%Y-%m-%d")
     content = (
         "Placement Confirmation\n"
         f"Date: {today}\n\n"

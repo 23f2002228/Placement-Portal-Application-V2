@@ -48,14 +48,26 @@ def validation_error(message):
     return jsonify({"message": message}), 400
 
 
+def format_datetime(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def format_date(value):
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d")
+
+
 def export_job_to_dict(export_job):
     return {
         "id": export_job.id,
         "export_type": export_job.export_type,
         "status": export_job.status,
         "file_path": export_job.file_path,
-        "requested_at": export_job.requested_at,
-        "completed_at": export_job.completed_at,
+        "requested_at": format_datetime(export_job.requested_at),
+        "completed_at": format_datetime(export_job.completed_at),
         "error_message": export_job.error_message,
     }
 
@@ -150,14 +162,14 @@ def job_to_dict(job):
         "min_cgpa": job.min_cgpa,
         "eligible_branches": job.eligible_branches,
         "eligible_year": job.eligible_year,
-        "application_deadline": job.application_deadline,
-        "drive_date": job.drive_date,
+        "application_deadline": format_datetime(job.application_deadline),
+        "drive_date": format_datetime(job.drive_date),
         "status": DB_STATUS_TO_JOB_STATUS.get(job.status, job.status),
         "admin_status": job.status,
         "rejection_reason": job.rejection_reason,
         "applications_count": len(job.applications),
-        "created_at": job.created_at,
-        "updated_at": job.updated_at,
+        "created_at": format_datetime(job.created_at),
+        "updated_at": format_datetime(job.updated_at),
     }
 
 
@@ -175,8 +187,8 @@ def company_to_dict(company):
         "description": company.description,
         "approval_status": company.approval_status,
         "rejection_reason": company.rejection_reason,
-        "created_at": company.created_at,
-        "updated_at": company.updated_at,
+        "created_at": format_datetime(company.created_at),
+        "updated_at": format_datetime(company.updated_at),
     }
 
 
@@ -197,14 +209,14 @@ def interview_to_dict(interview):
         "job_id": job.id if job else None,
         "job_title": job.job_title if job else None,
         "company_name": company.company_name if company else None,
-        "scheduled_at": interview.scheduled_at,
+        "scheduled_at": format_datetime(interview.scheduled_at),
         "mode": interview.mode,
         "venue_or_link": interview.venue_or_link,
         "round_name": interview.round_name,
         "status": interview.status,
         "feedback": interview.feedback,
-        "created_at": interview.created_at,
-        "updated_at": interview.updated_at,
+        "created_at": format_datetime(interview.created_at),
+        "updated_at": format_datetime(interview.updated_at),
     }
 
 
@@ -216,7 +228,7 @@ def status_history_to_dict(history):
         "old_status": history.old_status,
         "new_status": history.new_status,
         "note": history.note,
-        "changed_at": history.changed_at,
+        "changed_at": format_datetime(history.changed_at),
         "changed_by_email": changed_by.email if changed_by else None,
         "changed_by_role": changed_by.role if changed_by else None,
     }
@@ -228,11 +240,11 @@ def placement_to_dict(placement):
         "application_id": placement.application_id,
         "position": placement.position,
         "salary": placement.salary,
-        "joining_date": placement.joining_date,
+        "joining_date": format_date(placement.joining_date),
         "status": placement.status,
-        "placed_at": placement.placed_at,
-        "created_at": placement.created_at,
-        "updated_at": placement.updated_at,
+        "placed_at": format_datetime(placement.placed_at),
+        "created_at": format_datetime(placement.created_at),
+        "updated_at": format_datetime(placement.updated_at),
     }
 
 
@@ -258,10 +270,10 @@ def application_to_dict(application, include_details=False):
         "job_title": job.job_title if job else None,
         "status": application.status,
         "remarks": application.remarks,
-        "application_date": application.application_date,
+        "application_date": format_datetime(application.application_date),
         "interviews": [interview_to_dict(interview) for interview in application.interviews],
-        "created_at": application.created_at,
-        "updated_at": application.updated_at,
+        "created_at": format_datetime(application.created_at),
+        "updated_at": format_datetime(application.updated_at),
     }
 
     if include_details:
@@ -277,6 +289,84 @@ def application_to_dict(application, include_details=False):
         )
 
     return data
+
+
+@cache.memoize(timeout=300)
+def get_cached_company_dashboard(company_id):
+    company = db.session.get(CompanyProfile, company_id)
+    job_ids = db.session.query(PlacementDrive.id).filter_by(company_id=company_id)
+
+    return {
+        "company": {
+            "id": company.id,
+            "company_name": company.company_name,
+            "approval_status": company.approval_status,
+        },
+        "total_jobs": PlacementDrive.query.filter_by(company_id=company_id).count(),
+        "active_jobs": PlacementDrive.query.filter_by(
+            company_id=company_id,
+            status="approved",
+        ).count(),
+        "pending_jobs": PlacementDrive.query.filter_by(
+            company_id=company_id,
+            status="pending",
+        ).count(),
+        "closed_jobs": PlacementDrive.query.filter_by(
+            company_id=company_id,
+            status="closed",
+        ).count(),
+        "received_applications": Application.query.filter(
+            Application.drive_id.in_(job_ids)
+        ).count(),
+        "shortlisted_candidates": Application.query.filter(
+            Application.drive_id.in_(job_ids),
+            Application.status.in_(["shortlisted", "interview_scheduled"]),
+        ).count(),
+        "selected_candidates": Application.query.filter(
+            Application.drive_id.in_(job_ids),
+            Application.status == "selected",
+        ).count(),
+    }
+
+
+@cache.memoize(timeout=300)
+def get_cached_company_jobs(company_id, status):
+    query = PlacementDrive.query.filter_by(company_id=company_id)
+
+    if status:
+        query = query.filter(PlacementDrive.status == JOB_STATUS_TO_DB.get(status, status))
+
+    jobs = query.order_by(PlacementDrive.created_at.desc()).all()
+    return [job_to_dict(job) for job in jobs]
+
+
+@cache.memoize(timeout=300)
+def get_cached_company_applications(company_id, status):
+    query = (
+        Application.query
+        .join(Application.drive)
+        .filter(PlacementDrive.company_id == company_id)
+    )
+
+    if status:
+        query = query.filter(Application.status == status)
+
+    applications = query.order_by(Application.application_date.desc()).all()
+    return [application_to_dict(application) for application in applications]
+
+
+@cache.memoize(timeout=300)
+def get_cached_company_interviews(company_id):
+    interviews = (
+        Interview.query
+        .join(Interview.application)
+        .join(Application.drive)
+        .filter(PlacementDrive.company_id == company_id)
+        .order_by(Interview.scheduled_at.asc())
+        .all()
+    )
+
+    return [interview_to_dict(interview) for interview in interviews]
 
 
 def create_notification(user_id, title, message, notification_type):
@@ -531,39 +621,7 @@ def company_dashboard():
     if error:
         return error
 
-    job_ids = db.session.query(PlacementDrive.id).filter_by(company_id=company.id)
-
-    return jsonify({
-        "company": {
-            "id": company.id,
-            "company_name": company.company_name,
-            "approval_status": company.approval_status,
-        },
-        "total_jobs": PlacementDrive.query.filter_by(company_id=company.id).count(),
-        "active_jobs": PlacementDrive.query.filter_by(
-            company_id=company.id,
-            status="approved",
-        ).count(),
-        "pending_jobs": PlacementDrive.query.filter_by(
-            company_id=company.id,
-            status="pending",
-        ).count(),
-        "closed_jobs": PlacementDrive.query.filter_by(
-            company_id=company.id,
-            status="closed",
-        ).count(),
-        "received_applications": Application.query.filter(
-            Application.drive_id.in_(job_ids)
-        ).count(),
-        "shortlisted_candidates": Application.query.filter(
-            Application.drive_id.in_(job_ids),
-            Application.status.in_(["shortlisted", "interview_scheduled"]),
-        ).count(),
-        "selected_candidates": Application.query.filter(
-            Application.drive_id.in_(job_ids),
-            Application.status == "selected",
-        ).count(),
-    }), 200
+    return jsonify(get_cached_company_dashboard(company.id)), 200
 
 
 @company_bp.route("/api/company/jobs", methods=["GET"])
@@ -576,16 +634,12 @@ def get_company_jobs():
         return error
 
     status = request.args.get("status", "").strip()
-    query = PlacementDrive.query.filter_by(company_id=company.id)
 
     if status:
         if status not in {"pending", "active", "rejected", "closed"}:
             return validation_error("Invalid status filter")
-        query = query.filter(PlacementDrive.status == JOB_STATUS_TO_DB.get(status, status))
 
-    jobs = query.order_by(PlacementDrive.created_at.desc()).all()
-
-    return jsonify([job_to_dict(job) for job in jobs]), 200
+    return jsonify(get_cached_company_jobs(company.id, status)), 200
 
 
 @company_bp.route("/api/company/jobs", methods=["POST"])
@@ -747,20 +801,12 @@ def get_company_applications():
         return error
 
     status = request.args.get("status", "").strip()
-    query = (
-        Application.query
-        .join(Application.drive)
-        .filter(PlacementDrive.company_id == company.id)
-    )
 
     if status:
         if status not in set(APPLICATION_TRANSITIONS.keys()):
             return validation_error("Invalid application status filter")
-        query = query.filter(Application.status == status)
 
-    applications = query.order_by(Application.application_date.desc()).all()
-
-    return jsonify([application_to_dict(application) for application in applications]), 200
+    return jsonify(get_cached_company_applications(company.id, status)), 200
 
 
 @company_bp.route("/api/company/applications/<int:application_id>", methods=["GET"])
@@ -806,6 +852,7 @@ def update_application_status_with_payload(application_id, data):
     close_interviews_for_final_application_status(application, feedback)
     ensure_placement_for_selected_application(application)
     db.session.commit()
+    cache.clear()
 
     if new_status == "selected" and old_status != "selected":
         send_student_selected_email(application)
@@ -910,6 +957,7 @@ def schedule_interview(application_id):
         )
 
     db.session.commit()
+    cache.clear()
     send_interview_scheduled_email(application, interview)
 
     return jsonify({
@@ -928,16 +976,7 @@ def get_company_interviews():
     if error:
         return error
 
-    interviews = (
-        Interview.query
-        .join(Interview.application)
-        .join(Application.drive)
-        .filter(PlacementDrive.company_id == company.id)
-        .order_by(Interview.scheduled_at.asc())
-        .all()
-    )
-
-    return jsonify([interview_to_dict(interview) for interview in interviews]), 200
+    return jsonify(get_cached_company_interviews(company.id)), 200
 
 
 @company_bp.route("/api/company/exports/<export_type>", methods=["POST"])
