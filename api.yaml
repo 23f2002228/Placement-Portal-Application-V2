@@ -1,0 +1,877 @@
+openapi: 3.0.3
+info:
+  title: Placement Portal Application V2 API
+  version: 1.0.0
+  description: >
+    REST API for the Placement Portal Application V2. The system supports
+    institute admin, company, and student workflows including authentication,
+    company/drive approval, job applications, interviews, placements,
+    notifications, and CSV export jobs.
+servers:
+  - url: http://localhost:5000
+    description: Local Flask backend
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            email:
+              type: string
+            role:
+              type: string
+              enum: [admin, company, student]
+            access_token:
+              type: string
+paths:
+  /api/register:
+    post:
+      security: []
+      summary: Register a student or company account
+      description: Creates a user and the matching student/company profile. Company accounts remain pending until admin approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201":
+          description: User registered successfully
+        "400":
+          description: Invalid or incomplete registration data
+        "409":
+          description: Email already exists
+
+  /api/login:
+    post:
+      security: []
+      summary: Login for student or company users
+      description: Authenticates a non-admin user and returns a JWT access token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+        "403":
+          description: Account inactive, blacklisted, or company approval pending
+
+  /api/admin/login:
+    post:
+      security: []
+      summary: Login for admin users
+      description: Authenticates an admin account and returns a JWT access token.
+      responses:
+        "200":
+          description: Admin login successful
+        "401":
+          description: Invalid credentials
+
+  /api/profile:
+    get:
+      summary: Get current authenticated user
+      description: Returns the id, email, and role for the logged-in user.
+      responses:
+        "200":
+          description: Current user profile returned
+        "403":
+          description: Account not active or company approval required
+
+  /api/admin/dashboard:
+    get:
+      summary: Get admin dashboard summary
+      description: Returns counts for students, companies, drives, applications, active users, and blacklisted users.
+      responses:
+        "200":
+          description: Dashboard summary returned
+        "403":
+          description: Admin access required
+
+  /api/admin/users:
+    get:
+      summary: List all users
+      description: Returns all users with id, email, role, active/blacklist status, and creation date.
+      responses:
+        "200":
+          description: Users returned
+        "403":
+          description: Admin access required
+
+  /api/admin/users/{user_id}/activate:
+    patch:
+      summary: Activate a user account
+      description: Marks a non-admin user account as active.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User activated successfully
+        "400":
+          description: User cannot be activated
+        "404":
+          description: User not found
+
+  /api/admin/users/{user_id}/deactivate:
+    patch:
+      summary: Deactivate a user account
+      description: Marks a non-admin user account as inactive.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User deactivated successfully
+        "400":
+          description: Admin accounts cannot be managed from this dashboard
+        "404":
+          description: User not found
+
+  /api/admin/users/{user_id}/blacklist:
+    patch:
+      summary: Blacklist a user account
+      description: Marks a non-admin user as blacklisted and inactive.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User blacklisted successfully
+        "404":
+          description: User not found
+
+  /api/admin/users/{user_id}/unblacklist:
+    patch:
+      summary: Remove a user from blacklist
+      description: Clears blacklist status for a non-admin user.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User removed from blacklist successfully
+        "404":
+          description: User not found
+
+  /api/admin/companies:
+    get:
+      summary: List companies for admin
+      description: Supports searching by name, industry, location, email, and filtering by approval status.
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: search_by
+          in: query
+          schema:
+            type: string
+            enum: [all, name, industry, location, email]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Companies returned
+
+  /api/admin/companies/{company_id}/approve:
+    patch:
+      summary: Approve a company
+      description: Allows an approved company to log in and use company workflows.
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company approved successfully
+        "404":
+          description: Company not found
+
+  /api/admin/companies/{company_id}/reject:
+    patch:
+      summary: Reject a company
+      description: Rejects a company registration and stores the rejection reason.
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Company rejected successfully
+        "400":
+          description: Rejection reason is required
+        "404":
+          description: Company not found
+
+  /api/admin/students:
+    get:
+      summary: List students for admin
+      description: Supports searching by student name, roll number, phone, email, or numeric id.
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Students returned
+
+  /api/admin/drives:
+    get:
+      summary: List placement drives for admin
+      description: Supports searching by job title, location, skills, company name, or industry and filtering by drive status.
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, closed]
+      responses:
+        "200":
+          description: Placement drives returned
+
+  /api/admin/drives/{drive_id}/approve:
+    patch:
+      summary: Approve a placement drive
+      description: Makes a pending drive visible and open to eligible students.
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Placement drive approved successfully
+        "400":
+          description: Drive cannot be approved
+        "404":
+          description: Placement drive not found
+
+  /api/admin/drives/{drive_id}/reject:
+    patch:
+      summary: Reject a placement drive
+      description: Rejects a pending drive and stores the rejection reason.
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Placement drive rejected successfully
+        "400":
+          description: Rejection reason is required or drive is not pending
+        "404":
+          description: Placement drive not found
+
+  /api/admin/drives/{drive_id}/close:
+    patch:
+      summary: Close a placement drive
+      description: Changes an approved drive to closed status.
+      parameters:
+        - name: drive_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Placement drive closed successfully
+        "400":
+          description: Only approved drives can be closed
+        "404":
+          description: Placement drive not found
+
+  /api/admin/applications:
+    get:
+      summary: List all applications for admin
+      description: Supports searching by student, roll number, job title, company name, and filtering by application status.
+      responses:
+        "200":
+          description: Applications returned
+
+  /api/admin/applications/{application_id}:
+    get:
+      summary: Get application details for admin
+      description: Returns detailed application data including student, company, drive, interviews, status history, and placement.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application returned
+        "404":
+          description: Application not found
+
+  /api/student/profile:
+    get:
+      summary: Get student profile
+      description: Returns the logged-in student's profile details.
+      responses:
+        "200":
+          description: Student profile returned
+    patch:
+      summary: Update student profile
+      description: Updates editable student profile fields such as name, branch, year, CGPA, phone, skills, experience, and resume URL.
+      responses:
+        "200":
+          description: Student profile updated successfully
+
+  /api/student/profile/resume:
+    post:
+      summary: Upload student resume
+      description: Uploads a PDF resume up to 5 MB and stores its URL on the student profile.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                resume:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Resume uploaded successfully
+        "400":
+          description: Invalid resume file
+
+  /api/uploads/resumes/{filename}:
+    get:
+      security: []
+      summary: Download uploaded resume
+      description: Serves a stored resume PDF by filename.
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resume file returned
+
+  /api/student/dashboard:
+    get:
+      summary: Get student dashboard summary
+      description: Returns student application counts, available jobs, interview status counts, and placement count.
+      responses:
+        "200":
+          description: Student dashboard returned
+
+  /api/student/jobs:
+    get:
+      summary: List approved jobs for student
+      description: Returns approved placement drives with eligibility and application status for the logged-in student.
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Jobs returned
+
+  /api/student/jobs/{job_id}:
+    get:
+      summary: Get job details for student
+      description: Returns one approved job with eligibility and application status.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job returned
+        "404":
+          description: Job not found
+
+  /api/student/jobs/{job_id}/apply:
+    post:
+      summary: Apply for a job
+      description: Creates an application if the student is eligible and has not already applied.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Application submitted successfully
+        "400":
+          description: Student is not eligible or already applied
+        "404":
+          description: Job not found
+
+  /api/student/applications:
+    get:
+      summary: List student applications
+      description: Returns applications submitted by the logged-in student, optionally filtered by status.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [applied, shortlisted, interview_scheduled, selected, rejected, withdrawn]
+      responses:
+        "200":
+          description: Applications returned
+
+  /api/student/applications/{application_id}:
+    get:
+      summary: Get student application details
+      description: Returns a student's application with job, interviews, status history, and placement details.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application returned
+        "404":
+          description: Application not found
+
+  /api/student/interviews:
+    get:
+      summary: List student interviews
+      description: Returns interviews linked to the logged-in student's applications.
+      responses:
+        "200":
+          description: Interviews returned
+
+  /api/student/placements:
+    get:
+      summary: List student placements
+      description: Returns placement offers linked to the logged-in student.
+      responses:
+        "200":
+          description: Placements returned
+
+  /api/student/placements/{placement_id}/confirmation:
+    get:
+      summary: Download placement confirmation
+      description: Downloads a plain text confirmation for one placement.
+      parameters:
+        - name: placement_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Placement confirmation file returned
+        "404":
+          description: Placement not found
+
+  /api/student/exports/{export_type}:
+    post:
+      summary: Start a student CSV export
+      description: Queues an application history or placement history export using Celery.
+      parameters:
+        - name: export_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [application_history, placement_history]
+      responses:
+        "202":
+          description: Export job queued
+        "503":
+          description: Export job could not be queued because Redis/Celery is unavailable
+
+  /api/student/exports:
+    get:
+      summary: List student export jobs
+      description: Returns export jobs requested by the logged-in student.
+      responses:
+        "200":
+          description: Export jobs returned
+
+  /api/student/exports/{export_id}/download:
+    get:
+      summary: Download student export file
+      description: Downloads a completed CSV export file requested by the logged-in student.
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Export file returned
+        "400":
+          description: Export is not ready yet
+        "404":
+          description: Export not found
+
+  /api/company/profile:
+    get:
+      summary: Get company profile
+      description: Returns the logged-in company's profile details.
+      responses:
+        "200":
+          description: Company profile returned
+    patch:
+      summary: Update company profile
+      description: Updates editable company profile fields such as company name, industry, location, HR details, website, and description.
+      responses:
+        "200":
+          description: Company profile updated successfully
+
+  /api/company/dashboard:
+    get:
+      summary: Get company dashboard summary
+      description: Returns company job counts, received applications, shortlisted candidates, and selected candidates.
+      responses:
+        "200":
+          description: Company dashboard returned
+
+  /api/company/jobs:
+    get:
+      summary: List company jobs
+      description: Returns placement drives created by the logged-in company, optionally filtered by status.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, rejected, closed]
+      responses:
+        "200":
+          description: Company jobs returned
+    post:
+      summary: Create a company job
+      description: Creates a placement drive in pending status for admin approval.
+      responses:
+        "201":
+          description: Job posted successfully and pending admin approval
+        "400":
+          description: Invalid job data
+
+  /api/company/jobs/{job_id}:
+    get:
+      summary: Get company job details
+      description: Returns one job owned by the logged-in company.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job returned
+        "404":
+          description: Job not found
+    patch:
+      summary: Update company job
+      description: Updates a pending or approved job owned by the logged-in company.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job updated successfully
+        "400":
+          description: Invalid job data or job cannot be edited
+        "404":
+          description: Job not found
+
+  /api/company/jobs/{job_id}/status:
+    patch:
+      summary: Update company job status
+      description: Lets a company switch an approved job between active and closed where allowed.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job status updated successfully
+        "400":
+          description: Invalid status transition
+
+  /api/company/jobs/{job_id}/applications:
+    get:
+      summary: List applications for a company job
+      description: Returns applications submitted for one job owned by the logged-in company.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job applications returned
+        "404":
+          description: Job not found
+
+  /api/company/applications:
+    get:
+      summary: List company applications
+      description: Returns all applications received for jobs owned by the logged-in company, optionally filtered by status.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [applied, shortlisted, interview_scheduled, selected, rejected, withdrawn]
+      responses:
+        "200":
+          description: Company applications returned
+
+  /api/company/applications/{application_id}:
+    get:
+      summary: Get company application details
+      description: Returns details for an application received by the logged-in company.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application returned
+        "404":
+          description: Application not found
+
+  /api/company/applications/{application_id}/status:
+    patch:
+      summary: Update application status
+      description: Updates application status to shortlisted, selected, or rejected, respecting allowed transitions.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application status updated successfully
+        "400":
+          description: Invalid status transition or missing rejection feedback
+
+  /api/company/applications/{application_id}/shortlist:
+    patch:
+      summary: Shortlist an applicant
+      description: Convenience endpoint that changes an application to shortlisted.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application shortlisted successfully
+
+  /api/company/applications/{application_id}/reject:
+    patch:
+      summary: Reject an applicant
+      description: Convenience endpoint that changes an application to rejected and requires feedback.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application rejected successfully
+        "400":
+          description: Feedback is required
+
+  /api/company/applications/{application_id}/select:
+    patch:
+      summary: Select an applicant
+      description: Convenience endpoint that changes an application to selected and creates a placement record if needed.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Applicant selected successfully
+
+  /api/company/applications/{application_id}/interviews:
+    post:
+      summary: Schedule an interview
+      description: Creates an interview for a shortlisted application and changes status to interview_scheduled.
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Interview scheduled successfully
+        "400":
+          description: Invalid interview details or application status
+
+  /api/company/interviews:
+    get:
+      summary: List company interviews
+      description: Returns interviews for applications received by the logged-in company.
+      responses:
+        "200":
+          description: Company interviews returned
+
+  /api/company/exports/{export_type}:
+    post:
+      summary: Start a company CSV export
+      description: Queues an application history or placement history export for the logged-in company.
+      parameters:
+        - name: export_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [application_history, placement_history]
+      responses:
+        "202":
+          description: Export job queued
+        "503":
+          description: Export job could not be queued because Redis/Celery is unavailable
+
+  /api/company/exports:
+    get:
+      summary: List company export jobs
+      description: Returns export jobs requested by the logged-in company user.
+      responses:
+        "200":
+          description: Export jobs returned
+
+  /api/company/exports/{export_id}/download:
+    get:
+      summary: Download company export file
+      description: Downloads a completed CSV export file requested by the logged-in company user.
+      parameters:
+        - name: export_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Export file returned
+        "400":
+          description: Export is not ready yet
+        "404":
+          description: Export not found
+
+  /api/notifications:
+    get:
+      summary: List current user notifications
+      description: Returns the latest notifications and unread notification count for the logged-in user.
+      responses:
+        "200":
+          description: Notifications returned
+        "403":
+          description: Active user access required
+
+  /api/notifications/{notification_id}/read:
+    patch:
+      summary: Mark one notification as read
+      description: Marks a single notification belonging to the logged-in user as read.
+      parameters:
+        - name: notification_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification marked as read
+        "404":
+          description: Notification not found
+
+  /api/notifications/read-all:
+    patch:
+      summary: Mark all notifications as read
+      description: Marks every unread notification for the logged-in user as read.
+      responses:
+        "200":
+          description: Notifications marked as read
