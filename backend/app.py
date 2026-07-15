@@ -1,10 +1,13 @@
+import os
+
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from werkzeug.security import generate_password_hash
 
 import config
 from extensions import cache
-from models import db
+from models import User, db
 from routes.admin import admin_bp
 from routes.auth import auth_bp
 from routes.company import company_bp
@@ -45,8 +48,26 @@ def test():
     return jsonify({"message": "API is working!"})
 
 
+def create_default_admin():
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@placementportal.com")
+    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+    existing_admin = User.query.filter_by(email=admin_email).first()
+    if existing_admin:
+        return
+
+    admin = User(
+        email=admin_email,
+        password_hash=generate_password_hash(admin_password),
+        role="admin",
+    )
+    db.session.add(admin)
+    db.session.commit()
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        create_default_admin()
 
     app.run(debug=True)

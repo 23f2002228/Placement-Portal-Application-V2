@@ -3,7 +3,7 @@
     <h2>Students</h2>
 
     <div class="controls">
-      <input v-model="search" placeholder="Search name, roll number, phone, email" />
+      <input v-model="search" placeholder="Search name, roll number, phone, email" @keyup.enter="loadStudents" />
       <button @click="loadStudents">Search</button>
     </div>
 
@@ -147,10 +147,5 @@ export default {
 </script>
 
 <style scoped>
-.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-input, button { padding: 8px; border: 1px solid #bbb; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.error { color: #b42318; }
+.controls { margin: 12px 0; }
 </style>

@@ -16,6 +16,7 @@ from models import (
     Notification,
     Placement,
     PlacementDrive,
+    StudentProfile,
     User,
     db,
     utc_now,
@@ -87,10 +88,12 @@ def student_application_rows(user):
 
     return [
         {
+            "student_id": student.id,
             "company_name": application.drive.company.company_name if application.drive and application.drive.company else "",
-            "job_title": application.drive.job_title if application.drive else "",
-            "status": application.status,
+            "drive_title": application.drive.job_title if application.drive else "",
+            "application_status": application.status,
             "application_date": format_datetime(application.application_date),
+            "updated_at": format_datetime(application.updated_at),
             "remarks": application.remarks or "",
         }
         for application in applications
@@ -187,7 +190,15 @@ def export_history_csv(export_job_id):
     try:
         if user.role == "student" and export_job.export_type == "application_history":
             rows = student_application_rows(user)
-            fieldnames = ["company_name", "job_title", "status", "application_date", "remarks"]
+            fieldnames = [
+                "student_id",
+                "company_name",
+                "drive_title",
+                "application_status",
+                "application_date",
+                "updated_at",
+                "remarks",
+            ]
         elif user.role == "student" and export_job.export_type == "placement_history":
             rows = student_placement_rows(user)
             fieldnames = ["company_name", "job_title", "position", "salary", "status", "placed_at"]
@@ -236,6 +247,93 @@ def export_history_csv(export_job_id):
         )
         db.session.commit()
         return f"Export job {export_job.id} failed: {exc}"
+
+
+def student_is_eligible_for_drive(student, drive):
+    if drive.status != "approved":
+        return False
+
+    if drive.application_deadline <= utc_now():
+        return False
+
+    if student.cgpa < drive.min_cgpa:
+        return False
+
+    if student.year != drive.eligible_year:
+        return False
+
+    allowed_branches = [
+        branch.strip().lower()
+        for branch in (drive.eligible_branches or "").split(",")
+        if branch.strip()
+    ]
+
+    return "all" in allowed_branches or student.branch.lower() in allowed_branches
+
+
+@celery_app.task
+def send_application_deadline_reminders():
+    now = utc_now()
+    reminder_until = now + timedelta(days=1)
+    drives = (
+        PlacementDrive.query
+        .filter_by(status="approved")
+        .filter(PlacementDrive.application_deadline >= now)
+        .filter(PlacementDrive.application_deadline <= reminder_until)
+        .order_by(PlacementDrive.application_deadline.asc())
+        .all()
+    )
+
+    students = (
+        StudentProfile.query
+        .join(User)
+        .filter(User.is_active.is_(True))
+        .filter(User.is_blacklisted.is_(False))
+        .all()
+    )
+
+    sent_count = 0
+    for drive in drives:
+        for student in students:
+            user = student.user
+
+            if not user or not student_is_eligible_for_drive(student, drive):
+                continue
+
+            existing_application = Application.query.filter_by(
+                student_id=student.id,
+                drive_id=drive.id,
+            ).first()
+            if existing_application:
+                continue
+
+            marker = f"drive #{drive.id}"
+            existing_notification = (
+                Notification.query
+                .filter_by(user_id=user.id, notification_type="deadline", title="Application deadline reminder")
+                .filter(Notification.message.contains(marker))
+                .first()
+            )
+            if existing_notification:
+                continue
+
+            html = render_template(
+                "application_deadline_reminder.html",
+                student=student,
+                drive=drive,
+                company=drive.company,
+            )
+            try_send_email(user.email, f"Application Deadline Reminder - {drive.job_title}", html, content="html")
+            create_notification(
+                user.id,
+                "Application deadline reminder",
+                f"{drive.job_title} applications close at {format_datetime(drive.application_deadline)} ({marker}).",
+                "deadline",
+            )
+            sent_count += 1
+
+    db.session.commit()
+    return f"Sent {sent_count} application deadline reminders"
 
 
 @celery_app.task
@@ -290,6 +388,70 @@ def send_interview_reminders():
 
     db.session.commit()
     return f"Sent {sent_count} interview reminders"
+
+
+@celery_app.task
+def generate_monthly_admin_report(month=None, year=None):
+    today = utc_now()
+    if month is None or year is None:
+        month, year = previous_month(today)
+
+    start, end = month_range(month, year)
+    total_drives = (
+        PlacementDrive.query
+        .filter(PlacementDrive.created_at >= start)
+        .filter(PlacementDrive.created_at < end)
+        .count()
+    )
+    total_applications = (
+        Application.query
+        .filter(Application.application_date >= start)
+        .filter(Application.application_date < end)
+        .count()
+    )
+    total_selected = (
+        Application.query
+        .filter(Application.updated_at >= start)
+        .filter(Application.updated_at < end)
+        .filter(Application.status == "selected")
+        .count()
+    )
+
+    ensure_generated_dirs()
+    filename = f"admin_{year}_{month:02d}.html"
+    file_path = os.path.join(REPORT_DIR, filename)
+    html = render_template(
+        "admin_monthly_report.html",
+        month=month,
+        year=year,
+        total_drives=total_drives,
+        total_applications=total_applications,
+        total_selected=total_selected,
+    )
+
+    with open(file_path, "w", encoding="utf-8") as report_file:
+        report_file.write(html)
+
+    admins = User.query.filter_by(role="admin", is_active=True, is_blacklisted=False).all()
+    sent_count = 0
+    for admin in admins:
+        if try_send_email(
+            admin.email,
+            f"Monthly Placement Activity Report - {month:02d}/{year}",
+            html,
+            content="html",
+        ):
+            sent_count += 1
+
+        create_notification(
+            admin.id,
+            "Monthly placement report",
+            f"Institute activity report for {month:02d}/{year} has been generated.",
+            "report",
+        )
+
+    db.session.commit()
+    return f"Generated admin monthly report and sent {sent_count} emails"
 
 
 @celery_app.task

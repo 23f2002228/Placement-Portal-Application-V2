@@ -60,14 +60,3 @@ export default {
   },
 }
 </script>
-
-<style scoped>
-.auth-box { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.simple-card { display: grid; gap: 14px; width: min(420px, 100%); padding: 24px; border: 1px solid #ddd; background: white; }
-.home-link { color: #344054; text-decoration: none; width: fit-content; }
-.home-link:hover { text-decoration: underline; }
-label { display: grid; gap: 6px; }
-input { padding: 10px; border: 1px solid #bbb; }
-button { padding: 10px 14px; cursor: pointer; }
-.error { color: #b42318; }
-</style>

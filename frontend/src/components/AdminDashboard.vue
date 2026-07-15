@@ -5,15 +5,18 @@
         <h1>Admin Dashboard</h1>
         <p>{{ email }}</p>
       </div>
-      <button @click="$emit('logout')">Logout</button>
+      <div class="header-actions">
+        <NotificationBell />
+        <button @click="$emit('logout')">Logout</button>
+      </div>
     </header>
 
     <nav class="tabs">
-      <button @click="activeTab = 'overview'">Overview</button>
-      <button @click="activeTab = 'companies'">Companies</button>
-      <button @click="activeTab = 'students'">Students</button>
-      <button @click="activeTab = 'drives'">Drives</button>
-      <button @click="activeTab = 'applications'">Applications</button>
+      <button :class="{ active: activeTab === 'overview' }" @click="activeTab = 'overview'">Overview</button>
+      <button :class="{ active: activeTab === 'companies' }" @click="activeTab = 'companies'">Companies</button>
+      <button :class="{ active: activeTab === 'students' }" @click="activeTab = 'students'">Students</button>
+      <button :class="{ active: activeTab === 'drives' }" @click="activeTab = 'drives'">Drives</button>
+      <button :class="{ active: activeTab === 'applications' }" @click="activeTab = 'applications'">Applications</button>
     </nav>
 
     <main class="dashboard-body">
@@ -32,6 +35,7 @@ import AdminCompanies from '@/components/AdminCompanies.vue'
 import AdminDrives from '@/components/AdminDrives.vue'
 import AdminOverview from '@/components/AdminOverview.vue'
 import AdminStudents from '@/components/AdminStudents.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 export default {
   name: 'AdminDashboard',
@@ -41,6 +45,7 @@ export default {
     AdminDrives,
     AdminOverview,
     AdminStudents,
+    NotificationBell,
   },
   emits: ['logout'],
   data() {
@@ -57,13 +62,3 @@ export default {
   },
 }
 </script>
-
-<style scoped>
-.dashboard { min-height: 100vh; padding: 24px; }
-.dashboard-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 20px; }
-.dashboard-header h1 { margin: 0; }
-.dashboard-header p { margin: 4px 0 0; color: #667085; }
-.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-button { padding: 9px 12px; border: 1px solid #bbb; background: white; cursor: pointer; }
-.dashboard-body { border: 1px solid #ddd; background: white; padding: 18px; overflow-x: auto; }
-</style>

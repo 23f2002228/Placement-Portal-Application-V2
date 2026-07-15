@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Monthly Placement Activity Report</title>
+</head>
+<body>
+    <p>Hello Admin,</p>
+    <p>Here is the institute placement activity report for {{ "%02d"|format(month) }}/{{ year }}.</p>
+    <p><b>Number of drives conducted:</b> {{ total_drives }}</p>
+    <p><b>Number of students applied:</b> {{ total_applications }}</p>
+    <p><b>Number of students selected:</b> {{ total_selected }}</p>
+</body>
+</html>

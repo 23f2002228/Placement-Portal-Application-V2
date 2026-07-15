@@ -5,7 +5,7 @@
     <p v-if="error" class="error">{{ error }}</p>
 
     <div class="controls">
-      <input v-model="search" placeholder="Search company, position, or skills" />
+      <input v-model="search" placeholder="Search company, position, or skills" @keyup.enter="loadJobs" />
       <button @click="loadJobs">Search</button>
     </div>
 
@@ -40,7 +40,7 @@
           </td>
           <td>{{ job.application_deadline }}</td>
           <td>
-            <span v-if="job.already_applied">Applied: {{ job.application_status }}</span>
+            <span v-if="job.already_applied">{{ job.application_status }}</span>
             <button v-else :disabled="!job.eligible" @click="applyForJob(job.id)">Apply</button>
           </td>
         </tr>
@@ -113,13 +113,6 @@ export default {
 </script>
 
 <style scoped>
-.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-input, button { padding: 8px; border: 1px solid #bbb; }
+.controls { margin-bottom: 12px; }
 input { min-width: min(360px, 100%); }
-button { cursor: pointer; background: white; }
-button:disabled { cursor: not-allowed; color: #888; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
-.error { color: #b42318; }
-.success { color: #067647; }
 </style>

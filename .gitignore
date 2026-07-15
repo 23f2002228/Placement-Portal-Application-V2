@@ -11,3 +11,6 @@ __pycache__/
 backend/generated/exports/*.csv
 backend/generated/reports/*.html
 backend/uploads/resumes/
+backend/wsl_env/
+backend/celerybeat-schedule
+~$*.docx

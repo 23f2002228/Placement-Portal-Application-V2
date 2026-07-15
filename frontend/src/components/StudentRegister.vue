@@ -139,14 +139,5 @@ export default {
 </script>
 
 <style scoped>
-.auth-box { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.simple-card { display: grid; gap: 12px; width: min(520px, 100%); padding: 24px; border: 1px solid #ddd; background: white; }
-.home-link { color: #344054; text-decoration: none; width: fit-content; }
-.home-link:hover { text-decoration: underline; }
-label { display: grid; gap: 6px; }
-input, textarea { padding: 10px; border: 1px solid #bbb; }
-button { padding: 10px 14px; cursor: pointer; }
-button:disabled { cursor: wait; opacity: .7; }
 .hint { margin: -6px 0 0; color: #667085; font-size: 0.9rem; }
-.error { color: #b42318; }
 </style>

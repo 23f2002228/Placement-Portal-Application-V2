@@ -5,16 +5,19 @@
         <h1>Company Dashboard</h1>
         <p>{{ email }}</p>
       </div>
-      <button @click="$emit('logout')">Logout</button>
+      <div class="header-actions">
+        <NotificationBell />
+        <button @click="$emit('logout')">Logout</button>
+      </div>
     </header>
 
     <nav class="tabs">
-      <button @click="activeTab = 'overview'">Overview</button>
-      <button @click="activeTab = 'profile'">Profile</button>
-      <button @click="activeTab = 'jobs'">Jobs</button>
-      <button @click="activeTab = 'applications'">Applications</button>
-      <button @click="activeTab = 'shortlisted'">Shortlisted</button>
-      <button @click="activeTab = 'interviews'">Interviews</button>
+      <button :class="{ active: activeTab === 'overview' }" @click="activeTab = 'overview'">Overview</button>
+      <button :class="{ active: activeTab === 'profile' }" @click="activeTab = 'profile'">Profile</button>
+      <button :class="{ active: activeTab === 'jobs' }" @click="activeTab = 'jobs'">Jobs</button>
+      <button :class="{ active: activeTab === 'applications' }" @click="activeTab = 'applications'">Applications</button>
+      <button :class="{ active: activeTab === 'shortlisted' }" @click="activeTab = 'shortlisted'">Shortlisted</button>
+      <button :class="{ active: activeTab === 'interviews' }" @click="activeTab = 'interviews'">Interviews</button>
     </nav>
 
     <main class="dashboard-body">
@@ -38,6 +41,7 @@
 import CompanyApplications from '@/components/CompanyApplications.vue'
 import CompanyInterviews from '@/components/CompanyInterviews.vue'
 import CompanyJobs from '@/components/CompanyJobs.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import CompanyOverview from '@/components/CompanyOverview.vue'
 import CompanyProfile from '@/components/CompanyProfile.vue'
 import CompanyShortlisted from '@/components/CompanyShortlisted.vue'
@@ -48,6 +52,7 @@ export default {
     CompanyApplications,
     CompanyInterviews,
     CompanyJobs,
+    NotificationBell,
     CompanyOverview,
     CompanyProfile,
     CompanyShortlisted,
@@ -67,13 +72,3 @@ export default {
   },
 }
 </script>
-
-<style scoped>
-.dashboard { min-height: 100vh; padding: 24px; }
-.dashboard-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 20px; }
-.dashboard-header h1 { margin: 0; }
-.dashboard-header p { margin: 4px 0 0; color: #667085; }
-.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-.dashboard-body { border: 1px solid #ddd; background: white; padding: 18px; overflow-x: auto; }
-button { padding: 9px 12px; border: 1px solid #bbb; background: white; cursor: pointer; }
-</style>

@@ -10,7 +10,7 @@
         <option value="location">Location</option>
         <option value="email">Email</option>
       </select>
-      <input v-model="search" :placeholder="searchPlaceholder" />
+      <input v-model="search" :placeholder="searchPlaceholder" @keyup.enter="loadCompanies" />
       <select v-model="status">
         <option value="">All status</option>
         <option value="pending">Pending</option>
@@ -193,10 +193,5 @@ export default {
 </script>
 
 <style scoped>
-.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-input, select, button { padding: 8px; border: 1px solid #bbb; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
-.actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.error { color: #b42318; }
+.controls { margin: 12px 0; }
 </style>

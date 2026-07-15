@@ -15,7 +15,7 @@
     <div class="toolbar">
       <label>
         Job
-        <select v-model="selectedJobId">
+        <select v-model="selectedJobId" @change="loadApplications">
           <option value="">All jobs</option>
           <option v-for="job in jobs" :key="job.id" :value="job.id">
             {{ job.job_title }}
@@ -25,7 +25,7 @@
 
       <label>
         Status
-        <select v-model="status">
+        <select v-model="status" @change="loadApplications">
           <option value="">All status</option>
           <option value="applied">Applied</option>
           <option value="shortlisted">Shortlisted</option>
@@ -35,8 +35,6 @@
           <option value="withdrawn">Withdrawn</option>
         </select>
       </label>
-
-      <button class="primary-button" @click="loadApplications">Load applications</button>
     </div>
 
     <p v-if="loading">Loading applications...</p>
@@ -363,10 +361,9 @@ export default {
 .toolbar, .export-actions, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .toolbar { align-items: end; padding: 12px; border: 1px solid #ddd; background: #f8fafc; }
 .toolbar label { display: grid; gap: 4px; color: #344054; font-size: 0.9rem; font-weight: 600; }
-select, button { padding: 8px; border: 1px solid #bbb; }
-button { cursor: pointer; background: white; }
+select { padding: 8px; border: 1px solid #bbb; }
 .primary-button { background: #1d4ed8; border-color: #1d4ed8; color: white; }
-.ghost-button { background: #f8fafc; }
+.ghost-button { background: #f8fafc; color: #344054; }
 .content-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
 .table-panel { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; background: white; }

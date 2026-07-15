@@ -195,8 +195,8 @@ export default {
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; max-width: 900px; }
 label { display: grid; gap: 6px; }
 .wide, .form-actions { grid-column: 1 / -1; }
-input, textarea, button { padding: 8px; border: 1px solid #bbb; }
-button { width: fit-content; cursor: pointer; background: white; }
+input, textarea { padding: 8px; border: 1px solid #bbb; }
+button { width: fit-content; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint { margin: -6px 0 0; color: #667085; font-size: 0.9rem; }
 .error { color: #b42318; }

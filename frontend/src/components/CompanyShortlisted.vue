@@ -185,8 +185,7 @@ export default {
 .schedule-box { border: 1px solid #ddd; padding: 12px; margin-bottom: 16px; }
 .schedule-form { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; }
 label { display: grid; gap: 6px; }
-input, select, button { padding: 8px; border: 1px solid #bbb; }
-button { cursor: pointer; background: white; }
+input, select { padding: 8px; border: 1px solid #bbb; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }

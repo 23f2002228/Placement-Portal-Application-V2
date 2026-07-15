@@ -6,14 +6,13 @@
 
     <div v-if="!showJobForm">
       <div class="controls">
-        <select v-model="status">
+        <select v-model="status" @change="loadJobs">
           <option value="">All jobs</option>
           <option value="pending">Pending admin approval</option>
           <option value="active">Active</option>
           <option value="rejected">Rejected</option>
           <option value="closed">Closed</option>
         </select>
-        <button @click="loadJobs">Load jobs</button>
         <button @click="openCreateForm">Create job</button>
       </div>
 
@@ -201,7 +200,7 @@ export default {
     },
     toInputDate(value) {
       if (!value) return ''
-      return String(value).slice(0, 16)
+      return String(value).replace(' ', 'T').slice(0, 16)
     },
     async changeJobStatus(jobId, status) {
       this.error = ''
@@ -225,14 +224,6 @@ export default {
 <style scoped>
 .job-form { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .job-form h3, .wide, .form-actions { grid-column: 1 / -1; }
-label { display: grid; gap: 6px; }
-input, textarea, select, button { padding: 8px; border: 1px solid #bbb; }
-button { cursor: pointer; background: white; }
-.controls, .form-actions, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .controls { margin-bottom: 12px; }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
-.error { color: #b42318; }
-.success { color: #067647; }
 @media (max-width: 700px) { .job-form { grid-template-columns: 1fr; } }
 </style>

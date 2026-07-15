@@ -31,6 +31,7 @@ export default {
       localStorage.removeItem('role')
       localStorage.removeItem('email')
       this.isLoggedIn = false
+      this.$router.push('/')
     },
   },
 }

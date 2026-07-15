@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Application Deadline Reminder</title>
+</head>
+<body>
+    <p>Hello {{ student.full_name }},</p>
+    <p>This is a reminder that an eligible placement drive is closing soon.</p>
+    <p><b>Drive:</b> {{ drive.job_title }}</p>
+    <p><b>Company:</b> {{ company.company_name if company else "Company" }}</p>
+    <p><b>Deadline:</b> {{ drive.application_deadline.strftime("%Y-%m-%d %H:%M") }}</p>
+    <p>Please log in to the Placement Portal if you want to apply.</p>
+</body>
+</html>

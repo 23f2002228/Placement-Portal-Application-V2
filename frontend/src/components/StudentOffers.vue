@@ -2,7 +2,6 @@
   <section>
     <h2>Offers</h2>
     <div class="controls">
-      <button @click="loadPlacements">Refresh</button>
       <button @click="startExport">Export placements CSV</button>
     </div>
 
@@ -133,7 +132,6 @@ export default {
 
 <style scoped>
 .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-button { padding: 8px; border: 1px solid #bbb; background: white; cursor: pointer; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
 .error { color: #b42318; }

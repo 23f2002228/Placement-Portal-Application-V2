@@ -86,6 +86,7 @@ Stores academic and personal details of students.
 | phone | String | Nullable | Contact number |
 | resume_url | String | Nullable | Uploaded resume path |
 | skills | Text | Nullable | Student skills |
+| experience | Text | Nullable | Student experience details |
 | created_at | DateTime | Default current time | Profile creation time |
 | updated_at | DateTime | Auto update | Last update time |
 

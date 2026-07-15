@@ -1,7 +1,6 @@
 <template>
   <section>
     <h2>Interviews</h2>
-    <button @click="loadInterviews">Refresh</button>
 
     <p v-if="loading">Loading interviews...</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -78,7 +77,6 @@ export default {
 </script>
 
 <style scoped>
-button { padding: 8px; border: 1px solid #bbb; background: white; cursor: pointer; margin-bottom: 12px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
 .error { color: #b42318; }
